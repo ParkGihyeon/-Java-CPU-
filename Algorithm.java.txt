@@ -1,0 +1,11 @@
+public enum Algorithm {
+	FCFS, 
+	SJF,
+	Prio,
+	Deadline,
+	PPrio,
+	SRT,
+	HRN,
+	HRN2,
+	RR
+}

@@ -1,0 +1,646 @@
+import java.awt.Graphics;
+import java.util.*;
+
+import javax.swing.*;
+
+public class CPU_Scheduling {
+   
+   List<Job> _jobs; 
+   List<Job> _jobs2; 
+   Algorithm _algorithm;
+   ArrayList<Double> timeArray;
+   ArrayList<String> IDArray;
+   List<Job> _joblist;
+   List<Job> _job_temp;
+   List<Job> _job_temp2;
+
+   PriorityQueue _queue, _queue_temp;
+   
+   GanttChart _gantt_chart;
+   GanttChart _gantt_chart2;
+   FrameMain _frame_main;
+   
+   List<Double> _TT;
+   List<Double> _WT;
+   List<Double> _TT2;
+   List<Double> _WT2;
+   List<Double> _RT;
+   
+   double _TTAve;
+   double _WTAve;
+   double _RTAve;
+   
+   String _result_tt;
+   String _result_wt;
+   String _result_rt;
+
+   public CPU_Scheduling(List<Job> _joblist, Algorithm _algorithm)   {
+      this._jobs = copyList(_joblist);
+      this._jobs2 = copyList(_joblist);
+      this._algorithm = _algorithm;
+      this._job_temp = copyList(_joblist);
+      this._job_temp2 = copyList(_joblist);
+      this._joblist = copyList(_joblist);
+      
+      this._queue = new PriorityQueue(_algorithm);
+      this._queue_temp =new PriorityQueue(_algorithm);
+      
+      this._gantt_chart = new GanttChart();
+      this._gantt_chart2 = new GanttChart();
+      
+      this.timeArray =  new ArrayList<>();
+      this.IDArray =  new ArrayList<>();
+      
+      this._TT = new ArrayList<>();
+      this._WT = new ArrayList<>();
+      this._TT2 = new ArrayList<>();
+      this._WT2 = new ArrayList<>();
+      this._RT = new ArrayList<>();
+      this._TTAve = 0.0;
+      this._WTAve = 0.0;
+      this._RTAve = 0.0;
+      this._result_tt = new String();
+      this._result_wt = new String();
+      this._result_rt = new String();
+   }
+   
+   List<Double> getTT()   {
+      return _TT;
+   }
+   List<Double> getWT()   {
+      return _WT;
+   }
+   List<Double> getTT2()   {
+      return _TT2;
+   }
+   List<Double> getWT2()   {
+      return _WT2;
+   }
+   List<Double> getRT() {
+        return _RT;
+    }
+   
+   double getTTAve()   {
+      return _TTAve;
+   }
+   double getWTAve()   {
+      return _WTAve;
+   }
+   double getRTAve() {
+        return _RTAve;
+    }
+   
+   GanttChart getGanttChart()   {
+      return _gantt_chart;
+   }
+   
+   String getResultTT()   {
+      return _result_tt;
+   }
+   String getResultWT()   {
+      return _result_wt;
+   }
+   String getResultRT() {
+        return _result_rt;
+    }
+   
+   boolean solve()   {
+      sortArrival();
+      if( _algorithm == Algorithm.FCFS ||
+         _algorithm == Algorithm.SJF ||
+         _algorithm == Algorithm.Prio )   {
+         nonPreemptiveAlgo();
+      }
+      else if(_algorithm == Algorithm.SRT)
+         {
+            double q = 0.0;
+            try   {
+               String input = JOptionPane.showInputDialog(null, "Quantum: ", 
+                  "Quantum", JOptionPane.QUESTION_MESSAGE);
+               q = Double.parseDouble(input);
+            }
+            catch(Exception exc)   {
+               JOptionPane.showMessageDialog(null, "입력 오류 Quantum은 int혹은 double형으로 입력!", 
+                     "Input Error", JOptionPane.ERROR_MESSAGE);
+               return false;
+            }
+            SRT(q);
+         }
+      else if( _algorithm == Algorithm.PPrio)   {
+         preemptiveAlgo();
+      }
+      else if(_algorithm == Algorithm.RR)   {
+         double q = 0.0;
+         try   {
+            String input = JOptionPane.showInputDialog(null, "Quantum: ", 
+               "Quantum", JOptionPane.QUESTION_MESSAGE);
+            q = Double.parseDouble(input);
+         }
+         catch(Exception exc)   {
+            JOptionPane.showMessageDialog(null, "입력 오류 Quantum은 int혹은 double형으로 입력!", 
+                  "Input Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+         }   
+         RR(q);
+      }
+      else if(_algorithm == Algorithm.HRN) {
+         HRN(); //우선순위를 구한다.
+      }
+      else if(_algorithm == Algorithm.HRN2) {
+         HRN2(); //nonPreemptiveAlgo에 HRN우선순위를 넣어주기만 하면 된다.
+      }
+      computeTTWT();
+      return true;
+   }
+
+   void nonPreemptiveAlgo()   {
+      Job tempJob = new Job();
+      double time = 0.0;
+      double idle = 0.0;
+      timeArray.add(0.0);//응답시간에 필요
+      while( !_joblist.isEmpty() )   {
+         for(int i = 0; i < _joblist.size(); i++)   {      
+            if( _joblist.get(i).getArrivalTime() <= time )    
+               _queue.enqueue(_joblist.get(i));
+            else   break;
+         }         
+         if( !_queue.isEmpty() )   {
+            tempJob = _queue.dequeue();
+            time += tempJob.getBurstTime();
+            _gantt_chart.addTimeList(time);
+            tempJob.setJobFinish(time);
+            _jobs.get( tempJob.getJobNumber()-1 ).setJobFinish(time);
+            _gantt_chart.addJobList("  " + tempJob.getJobName() + "\n("+tempJob.getBurstTime() +")" );
+            delete(tempJob);
+            IDArray.add(tempJob.getJobName());//응답시간에 필요
+            timeArray.add(time);//응답시간에 필요
+         }
+         else   {
+            tempJob = dequeue();
+            idle = tempJob.getArrivalTime()-time;
+            _gantt_chart.addJobList("IDLE" + "\n(" + idle +")");
+            _gantt_chart.addTimeList(time += idle);
+            enqueue(tempJob);
+            IDArray.add("IDLE");//응답시간에 필요
+            timeArray.add(time);//응답시간에 필요
+         }
+      }
+      timeArray.remove(timeArray.size()-1);
+      //중복제거
+       for (int i = 0; i < IDArray.size(); i++) {
+             for (int j = 0; j < IDArray.size(); j++) {
+                if(i==j) {}
+                else if (IDArray.get(j).equals(IDArray.get(i))) {
+                      IDArray.remove(j);
+                       timeArray.remove(j);
+                 }
+             }
+         }
+
+       //여기서 도착시간 빼야함
+        for(int i=0; i<IDArray.size(); i++) {
+           for(int j=0; j<_job_temp.size(); j++) {
+              
+              
+              if(IDArray.get(i) == _job_temp.get(j).getJobName()) {
+                 timeArray.set(i, timeArray.get(i)- _job_temp.get(j).getArrivalTime());
+              }
+           }
+        }
+   }
+   
+   void preemptiveAlgo()   {
+      Job tempJob = new Job();
+      Job nextJob = new Job();
+      double time = 0.0;
+      double idle = 0.0;
+      double temp = 0.0;
+      timeArray.add(0.0);//응답시간에 필요
+      while( _joblist.isEmpty() != true )   {
+         for(int i = 0; i < _joblist.size(); i++)   {      
+            if( _joblist.get(i).getArrivalTime() <= time )       
+               _queue.enqueue(_joblist.get(i));
+            else   break;
+         }
+         if( _queue.isEmpty() != true )   {
+            tempJob = _queue.dequeue();
+            for(int i = 0; i < _joblist.size(); i++)   {
+               if( _joblist.get(i).getArrivalTime() > time)   {
+                  nextJob = _joblist.get(i);
+                  break;
+               }
+            }
+            
+            
+            if( ( (time+tempJob.getBurstTime()) > nextJob.getArrivalTime() ) 
+                  && time < _joblist.get(_joblist.size()-1).getArrivalTime() )   {
+               temp = nextJob.getArrivalTime() - time;
+               time = nextJob.getArrivalTime();
+               tempJob.setBurstTime( tempJob.getBurstTime()-temp );
+               
+ 
+               _gantt_chart.addJobList("  " + tempJob.getJobName() + "\n("+temp +")");
+               _gantt_chart.addTimeList(time);
+               IDArray.add(tempJob.getJobName());//응답시간에 필요
+               timeArray.add(time);//응답시간에 필요
+
+            }
+            
+
+            
+            else   {
+               time += tempJob.getBurstTime();
+               _gantt_chart.addTimeList(time);
+               tempJob.setJobFinish(time);
+               _jobs.get( tempJob.getJobNumber()-1 ).setJobFinish(time);
+               _gantt_chart.addJobList("  " + tempJob.getJobName() + "\n("+tempJob.getBurstTime()+")");
+               delete(tempJob);
+               IDArray.add(tempJob.getJobName());//응답시간에 필요
+               timeArray.add(time);//응답시간에 필요
+            }
+         }
+         else   {
+            tempJob = dequeue();
+            idle = tempJob.getArrivalTime()-time;
+            _gantt_chart.addJobList("IDLE" + "\n(" + idle +")");
+            _gantt_chart.addTimeList(time += idle);
+            enqueue(tempJob);
+            IDArray.add("IDLE");//응답시간에 필요
+            timeArray.add(time);//응답시간에 필요
+         }
+      }
+      timeArray.remove(timeArray.size()-1);
+     
+      //중복제거
+       for (int i = IDArray.size()-1; i >= 0; i--) {
+             for (int j = IDArray.size()-1; j >= 0; j--) {
+                if(i==j) {}
+                else if (IDArray.get(j).equals(IDArray.get(i))) {
+                      IDArray.remove(i);
+                       timeArray.remove(i);
+                 }
+             }
+         }
+      
+       //여기서 도착시간 빼야함
+        for(int i=0; i<IDArray.size(); i++) {
+           for(int j=0; j<_job_temp.size(); j++) {
+              
+              
+              if(IDArray.get(i) == _job_temp.get(j).getJobName()) {
+                 timeArray.set(i, timeArray.get(i)- _job_temp.get(j).getArrivalTime());
+              }
+           }
+        }
+   }
+   
+   void SRT(double quantum) {
+         Job tempJob = new Job();
+         Job nextJob = new Job();
+         double time = 0.0;
+         double idle = 0.0;
+         double temp = 0.0;
+         int count=0;
+         //timeArray.add(0.0);//응답시간에 필요
+         timeArray.add(count, 0.0);
+         count++;   
+         while( _joblist.isEmpty() != true )   {
+            for(int i = 0; i < _joblist.size(); i++)   {      
+               if( _joblist.get(i).getArrivalTime() <= time )       
+                  _queue.enqueue(_joblist.get(i));
+               else   break;
+            }
+            if( _queue.isEmpty() != true )   {
+               tempJob = _queue.dequeue();
+               for(int i = 0; i < _joblist.size(); i++)   {
+                  if( _joblist.get(i).getArrivalTime() > time)   {
+                     nextJob = _joblist.get(i);
+                     break;
+                  }
+               }
+               if(tempJob.getBurstTime() != 0)   {
+                  if(tempJob.getBurstTime() > quantum)   {
+                    System.out.println("1");
+                     time += quantum;
+                     _gantt_chart.addTimeList(time);
+                     _gantt_chart.addJobList("  " + tempJob.getJobName() + "\n("+ quantum +")" );
+                     tempJob.setBurstTime( tempJob.getBurstTime()- quantum );
+                     tempJob.setArrivalTime(time);
+                    IDArray.add(count-1, tempJob.getJobName());//응답시간에 필요
+                    timeArray.add(count, time);//응답시간에 필요
+                    count++;
+                  }
+                  else   {
+                       time += tempJob.getBurstTime();
+                       tempJob.setBurstTime( tempJob.getBurstTime()-temp );
+                       tempJob.setJobFinish(time);
+                       _gantt_chart.addTimeList(time);
+                       _jobs.get( tempJob.getJobNumber()-1 ).setJobFinish(time);
+                       _gantt_chart.addJobList("  " + tempJob.getJobName() + "\n("+tempJob.getBurstTime()+")");
+                       IDArray.add(count-1, tempJob.getJobName());//응답시간에 필요
+                       timeArray.add(count, time);//응답시간에 필요
+                       count++;
+                       delete(tempJob);
+                   }
+               }  
+            }
+            else   {
+                  tempJob = dequeue();
+                  idle = tempJob.getArrivalTime()-time;
+                  _gantt_chart.addJobList("IDLE" + "\n(" + idle +")");
+                  _gantt_chart.addTimeList(time += idle);
+                  IDArray.add(count-1, "IDLE");//응답시간에 필요
+                  timeArray.add(count, time);//응답시간에 필요
+                  count++;
+                  enqueue(tempJob);
+               }
+         }    
+         timeArray.remove(timeArray.size()-1);         
+         //중복제거
+          for (int i = 0; i < timeArray.size()-1; i++) {
+                for (int j = 0; j < IDArray.size(); j++) {
+                   if(i==j) {}
+                   else if (IDArray.get(i).equals(IDArray.get(j))) {
+                         IDArray.remove(j);
+                          timeArray.remove(j);
+                    }
+                }
+            } 
+          //여기서 도착시간 빼야함
+          for(int i=0; i<IDArray.size(); i++) {
+              for(int j=0; j<_job_temp.size(); j++) {   
+                 if(IDArray.get(i) == _job_temp.get(j).getJobName()) {
+                    timeArray.set(i, timeArray.get(i)- _job_temp.get(j).getArrivalTime());
+                 }
+              }
+           }         
+   }
+   
+   void RR(double quantum)   {
+      Job tempJob = new Job();
+      timeArray.add(0.0);//응답시간에 필요
+      double time = 0.0;
+      double idle = 0.0;
+      while( _joblist.isEmpty() != true )   {
+         if( _joblist.get(0).getArrivalTime() <= time )   { 
+            tempJob = dequeue();
+            if(tempJob.getBurstTime() != 0)   {
+               if(tempJob.getBurstTime() > quantum)   {
+                  time += quantum;
+                  _gantt_chart.addTimeList(time);
+                  _gantt_chart.addJobList("  " + tempJob.getJobName() + "\n("+ quantum +")" );
+                  tempJob.setBurstTime( tempJob.getBurstTime()- quantum );
+                  tempJob.setArrivalTime(time);
+                  IDArray.add(tempJob.getJobName());//응답시간에 필요
+                  timeArray.add(time);//응답시간에 필요
+                  enqueue(tempJob);
+               }
+               else   {
+                  time += tempJob.getBurstTime();
+                  _gantt_chart.addTimeList(time);
+                  _gantt_chart.addJobList("  " + tempJob.getJobName() + "\n("+ tempJob.getBurstTime() +")" );
+                  tempJob.setBurstTime(0.0);
+                  tempJob.setJobFinish(time);
+                  _jobs.get( tempJob.getJobNumber()-1 ).setJobFinish(time);
+                  IDArray.add(tempJob.getJobName());//응답시간에 필요
+                  timeArray.add(time);//응답시간에 필요
+               }            
+            }
+         }
+         else   {
+            tempJob = dequeue();
+            idle = tempJob.getArrivalTime()-time;
+            _gantt_chart.addJobList("IDLE" + "\n(" + idle +")");
+            _gantt_chart.addTimeList(time += idle);
+            IDArray.add("IDLE");//응답시간에 필요
+            timeArray.add(time);//응답시간에 필요
+            enqueue(tempJob);
+         }
+      }
+      timeArray.remove(timeArray.size()-1);
+      //중복제거
+       for (int i = 0; i < IDArray.size(); i++) {
+             for (int j = 0; j < IDArray.size(); j++) {
+                if(i==j) {}
+                else if (IDArray.get(i).equals(IDArray.get(j))) {
+                      IDArray.remove(j);
+                       timeArray.remove(j);
+                 }
+             }
+         }
+       //여기서 도착시간 빼야함
+        for(int i=0; i<IDArray.size(); i++) {
+           for(int j=0; j<_job_temp.size(); j++) {
+              
+              
+              if(IDArray.get(i) == _job_temp.get(j).getJobName()) {
+                 timeArray.set(i, timeArray.get(i)- _job_temp.get(j).getArrivalTime());
+              }
+           }
+        }
+   }
+   
+   void HRN()   {
+   Job tempJob = new Job();
+   double temp_prio = 0;   
+   for(int i = 0; i < _joblist.size(); i++) //입력받은 우선순위 초기화
+      _joblist.get(i).setPriority(0);
+   
+   // HRN우선순위 = (wait + burst) / burst
+   double time = 0.0;
+      double idle = 0.0;
+      while( !_joblist.isEmpty() )   {
+         for(int i = 0; i < _joblist.size(); i++)   {      
+            if( _joblist.get(i).getArrivalTime() <= time )    
+               _queue.enqueue(_joblist.get(i));
+            else   break;
+         }            
+         if( !_queue.isEmpty() )   {
+            tempJob = _queue.dequeue();
+            time += tempJob.getBurstTime();
+            _gantt_chart2.addTimeList(time);
+            tempJob.setJobFinish(time);
+            _jobs.get( tempJob.getJobNumber()-1 ).setJobFinish(time);
+            _gantt_chart2.addJobList("  " + tempJob.getJobName() + "\n("+tempJob.getBurstTime() +")" );
+            delete(tempJob);
+         }
+         else   {
+            tempJob = dequeue();
+            idle = tempJob.getArrivalTime()-time;
+            _gantt_chart2.addJobList("IDLE" + "\n(" + idle +")");
+            _gantt_chart2.addTimeList(time += idle);
+
+            enqueue(tempJob);
+         }
+      }                  
+      computeTTWT2();
+         
+      for(int i=0; i<_jobs.size(); i++) { // HRN 우선순위를 구해준다
+         temp_prio = (_WT2.get(i) + _jobs.get(i).getBurstTime()) / _jobs.get(i).getBurstTime();
+         _job_temp2.get(i).setPriority(temp_prio);
+      }      
+      _joblist = copyList(_job_temp2);
+
+      HRN2();
+   }      
+   void HRN2()   {
+      Job tempJob = new Job();
+      double temp_prio = 0;   
+      timeArray.add(0.0);
+   
+      // HRN우선순위 = (wait + burst) / burst   
+      double time = 0.0;
+      double idle = 0.0;
+      while( !_joblist.isEmpty() )   {
+         for(int i = 0; i < _joblist.size(); i++)   {   
+            if( _joblist.get(i).getArrivalTime() <= time )    
+               _queue.enqueue(_joblist.get(i));
+            else   break;
+         }
+         if( !_queue.isEmpty() )   {
+            tempJob = _queue.dequeue();
+            time += tempJob.getBurstTime();
+            _gantt_chart.addTimeList(time);
+            tempJob.setJobFinish(time);
+            _jobs.get( tempJob.getJobNumber()-1 ).setJobFinish(time);   
+            _gantt_chart.addJobList("  " + tempJob.getJobName() + "\n("+tempJob.getBurstTime() +")" );
+            IDArray.add(tempJob.getJobName());//응답시간에 필요
+            timeArray.add(time);//응답시간에 필요
+            delete(tempJob);
+         }
+         else   {
+            tempJob = dequeue();
+            idle = tempJob.getArrivalTime()-time;
+            _gantt_chart.addJobList("IDLE" + "\n(" + idle +")");
+            _gantt_chart.addTimeList(time += idle);
+            IDArray.add("IDLE");//응답시간에 필요
+            timeArray.add(time);//응답시간에 필요
+            enqueue(tempJob);
+         }
+      }   
+      timeArray.remove(timeArray.size()-1);
+      //중복제거
+       for (int i = 0; i < IDArray.size(); i++) {
+             for (int j = 0; j < IDArray.size(); j++) {
+                if(i==j) {}
+                else if (IDArray.get(j).equals(IDArray.get(i))) {
+                      IDArray.remove(j);
+                       timeArray.remove(j);
+                 }
+             }
+         }
+       //여기서 도착시간 빼야함
+        for(int i=0; i<IDArray.size(); i++) {
+           for(int j=0; j<_job_temp.size(); j++) {
+              if(IDArray.get(i) == _job_temp.get(j).getJobName()) {
+                 timeArray.set(i, timeArray.get(i)- _job_temp.get(j).getArrivalTime());
+              }
+           }
+        }
+        computeTTWT();
+   }
+   
+   void computeTTWT()   {
+      String r = new String();
+      _TTAve=0;
+      _WTAve=0;
+      _RTAve=0;
+      
+      r = "\t각 프로세스별 반환시간\n\n";
+      for(int i = 0; i < _jobs.size(); i++)   {
+         _TT.add( _jobs.get(i).getJobFinish()- _jobs.get(i).getArrivalTime() );
+         r += _jobs.get(i).getJobName() + "의 반환시간: " + _TT.get(i) + "\n";
+         _TTAve += _TT.get(i);
+      }
+      _TTAve /= _jobs.size();
+      r += "평균 반환시간: " + _TTAve + "\n\n";
+      _result_tt = r;
+      
+      r = "\t각 프로세스별 대기시간\n\n";
+      for(int i = 0; i < _jobs.size(); i++)   {
+         _WT.add( _TT.get(i) - _jobs.get(i).getBurstTime() );
+         r += _jobs.get(i).getJobName() + "의 대기시간: " + _WT.get(i) + "\n";
+         _WTAve += _WT.get(i);
+      }
+      _WTAve /= _jobs.size();
+      r += "평균 대기시간: " + _WTAve + "\n\n";
+      _result_wt = r;
+
+      r = "\t각 프로세스별 응답시간\n\n"; 
+        int count = 0;
+        for(int i = 0; i < IDArray.size(); i++) {
+           _RT.add(timeArray.get(i)); 
+            r += IDArray.get(i) + "의 응답시간: " + _RT.get(i) + "\n";
+            _RTAve += _RT.get(i);
+            
+            if(IDArray.get(i).equals("IDLE"))
+               count++;
+        } 
+        _RTAve /= IDArray.size() - count; 
+        r += "평균 응답시간: " + _RTAve + "\n\n";
+        _result_rt = r;
+   }
+   
+   void computeTTWT2()   {
+      //반환시간
+      for(int i = 0; i < _jobs.size(); i++)   {
+         _TT2.add( _jobs.get(i).getJobFinish()- _jobs.get(i).getArrivalTime() );
+      }
+      //대기시간
+      for(int i = 0; i < _jobs.size(); i++)   {
+         _WT2.add( _TT2.get(i) - _jobs.get(i).getBurstTime() );
+      }
+   }
+   
+   void enqueue(Job job)   {
+      _joblist.add(job);
+      sortArrival();
+   }
+   
+   Job dequeue()   {
+      Job temp = new Job();
+      temp = _joblist.get(0);
+      _joblist.remove(0);
+      return temp;
+   }
+   
+   void delete(Job job)   {
+      for(int i = 0; i < _joblist.size(); i++)   
+         if( job == _joblist.get(i) )   {
+            _joblist.remove(i);
+            break;
+         }
+   }
+   
+   boolean isEmpty()   {
+      return _joblist.isEmpty(); 
+   }
+   
+   void sortArrival()   {
+      int i =0 , j = 0; 
+      Job temp = new Job();
+      for(i = 1; i < _joblist.size(); i++)   {
+         temp = _joblist.get(i);
+         j = i;
+         while( (j>0) && (_joblist.get(j-1).getArrivalTime() > temp.getArrivalTime()) )   {
+            _joblist.remove(j);
+            _joblist.add(j, _joblist.get(j-1));
+            j -= 1;
+         }
+         _joblist.remove(j);
+         _joblist.add(j, temp);
+      }
+   }
+   
+   ArrayList<Job> copyList(List<Job> _jobs)   {
+      ArrayList<Job> temp = new ArrayList<Job>();
+      for(Job j : _jobs)   {
+         temp.add(
+               new Job(j.getJobNumber(), j.getJobName(), j.getArrivalTime(),
+                     j.getBurstTime(), j.getJobFinish(),
+                     j.getPriority(), j.getDeadline())
+            );
+      }
+      return temp;
+   }
+}
